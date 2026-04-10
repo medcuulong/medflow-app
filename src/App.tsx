@@ -46,40 +46,38 @@ const stripPrefixNumber = (str: string) => {
 };
 
 // ============================================================================
-// 🔥 LOGIC CẤP VIP PRO: MÁY QUÉT TẦM NHIỆT TÌM THỜI GIAN THỰC HIỆN
+// 🔥 LOGIC CẤP VIP PRO: MÁY QUÉT DOM TÌM THỜI GIAN THỰC HIỆN
 // ============================================================================
 const getExecutionTime = (html: string) => {
   if (!html) return "Chưa có nội dung";
   try {
-    // 1. Phục dựng DOM ẩn để tránh vỡ chữ do HTML tags
-    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
     
-    // 2. Chỉ chắt lọc các thẻ văn bản từng câu một
-    const elements = Array.from(doc.body.querySelectorAll('p, li, div, span, h1, h2, h3, h4'));
+    // Lấy tất cả các thẻ có khả năng chứa đoạn văn bản thời gian
+    const elements = Array.from(doc.body.querySelectorAll('p, div, li, td, h1, h2, h3, h4'));
     
     for (const el of elements) {
+      // Lấy textContent bảo toàn khoảng trắng, loại bỏ HTML ẩn
       const text = el.textContent?.trim() || '';
-      
-      // Bỏ qua rác hoặc các đoạn văn quá dài (Thời gian thực hiện không bao giờ dài quá 200 ký tự)
-      if (!text || text.length > 200) continue; 
+      if (!text || text.length > 200) continue; // Bỏ qua đoạn quá dài
       
       const lowerText = text.toLowerCase();
       
-      // 3. Lưới lọc từ khóa đa biến thể
-      if (lowerText.includes('thời gian thực hiện') || lowerText.includes('thời gian tiến hành') || lowerText.includes('thời gian:')) {
-        
-        // Cắt lấy phần sau dấu 2 chấm
-        const match = text.match(/thời gian[^:]*:\s*(.*)/i);
+      // Nhận diện dòng chứa thời gian thực hiện
+      if (lowerText.includes('thời gian thực hiện') || lowerText.includes('thời gian tiến hành')) {
+        // Bắt mọi thứ sau dấu ":"
+        const match = text.match(/(?:thời gian thực hiện(?: kỹ thuật)?|thời gian tiến hành)[^:]*:\s*(.*)/i);
         if (match && match[1]) {
-          return `⏳ Thời gian: ${match[1].trim().replace(/\.$/, '')}`; // Xóa dấu chấm cuối cùng nếu có
+          return `⏳ Thời gian: ${match[1].trim().replace(/\.$/, '')}`;
         } else {
-          // Xử lý ca khó: BYT quên viết dấu ":" -> Cắt bỏ số thứ tự mục lục ở đầu câu (Ví dụ: "2.6.", "III.", "c)")
-          const cleanText = text.replace(/^([IVXLCDM]+\.|[a-z]\)|\d+(\.\d+)*\.?)\s*/i, '').trim();
-          return `⏳ ${cleanText}`;
+          // Trường hợp BYT gõ thiếu dấu ":"
+          const cleanText = text.replace(/^.*?(thời gian thực hiện(?: kỹ thuật)?|thời gian tiến hành)\s*/i, '').trim();
+          if (cleanText) return `⏳ Thời gian: ${cleanText.replace(/\.$/, '')}`;
         }
       }
     }
-    return "⏳ Không tìm thấy thông tin thời gian";
+    return "⏳ Chưa xác định được thời gian";
   } catch (e) {
     return "⏳ Lỗi đọc dữ liệu";
   }
@@ -417,7 +415,6 @@ export default function App() {
     reader.readAsBinaryString(acceptedFiles[0]);
   }, [activeSubGroup]);
 
-  // CẮT HÌNH ẢNH + TÍNH TOÁN TRƯỚC GIẢM TẢI CHO CPU
   const onDropWord = useCallback(async (acceptedFiles: File[]) => {
     if (!activeSubGroup || activeSubGroup.techniques?.length === 0) return alert("Hãy nạp danh sách Excel trước!");
     setIsProcessing(true);
