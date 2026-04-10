@@ -45,14 +45,23 @@ const stripPrefixNumber = (str: string) => {
   return str.replace(/^\d+[\.\-\s]*/, '').trim();
 };
 
+// --- HÀM BÓC TÁCH THỜI GIAN THỰC HIỆN ĐỂ HIỂN THỊ KHI RÊ CHUỘT ---
+const getExecutionTime = (html: string) => {
+  if (!html) return "Chưa có nội dung";
+  // Xóa sạch mã HTML để lấy Text thô
+  const text = html.replace(/<[^>]*>?/gm, ''); 
+  // Quét tìm cụm từ thời gian thực hiện, dừng lại ở dấu chấm hoặc xuống dòng
+  const match = text.match(/(?:Thời gian thực hiện(?: kỹ thuật)?\s*:)([^.\n]+)/i);
+  return match ? `Thời gian thực hiện: ${match[1].trim()}` : "Không tìm thấy thông tin thời gian";
+};
+
 // --- KIỂU DỮ LIỆU ---
 interface Technique { id: string; name: string; contentHtml: string; isExtracted: boolean; }
 interface SubGroup { id: string; name: string; order?: number; techniques: Technique[]; }
-interface Group { id: string; name: string; decisionNum?: string; issueDate?: string; order?: number; subGroups: SubGroup[]; }
+interface Group { id: string; name: string; decisionNum?: string; issueDate?: string; effectiveDate?: string; order?: number; subGroups: SubGroup[]; }
 interface SearchResult extends Technique { group: Group; subGroup: SubGroup; }
 
 export default function App() {
-  // --- PHÂN QUYỀN ADMIN VÀ GIAO DIỆN MOBILE ---
   const [isAdmin, setIsAdmin] = useState(false); 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); 
 
@@ -62,7 +71,7 @@ export default function App() {
       return;
     }
     const pwd = prompt("NHẬP MẬT KHẨU QUẢN TRỊ VIÊN:\n(Mặc định là 123456)");
-    if (pwd === "Cuulong@2026") { 
+    if (pwd === "123456") { 
       setIsAdmin(true);
       alert("Mở khóa thành công! Các chức năng chỉnh sửa đã hiện ra.");
     } else if (pwd !== null) {
@@ -70,7 +79,6 @@ export default function App() {
     }
   };
 
-  // ÁO GIÁP 1: BẢO VỆ LÚC KHỞI TẠO TỪ LOCAL STORAGE
   const [groups, setGroups] = useState<Group[]>(() => {
     const savedData = localStorage.getItem('medflow_local_backup');
     if (savedData) {
@@ -80,7 +88,7 @@ export default function App() {
       } catch (e) {}
     }
     return [
-      { id: 'g1', name: 'Chẩn đoán hình ảnh', decisionNum: '', issueDate: '', order: 0, subGroups: [] }
+      { id: 'g1', name: 'Chẩn đoán hình ảnh', decisionNum: '', issueDate: '', effectiveDate: '', order: 0, subGroups: [] }
     ];
   });
   
@@ -146,7 +154,8 @@ export default function App() {
         if (!gSnap.empty || !sgSnap.empty || !tSnap.empty) {
           gSnap.forEach((doc) => {
             const data = doc.data();
-            fetchedGroups.push({ id: data.id, name: data.name, decisionNum: data.decisionNum, issueDate: data.issueDate, order: data.order || 0, subGroups: [] });
+            // Cập nhật thêm trường effectiveDate (Ngày hiệu lực)
+            fetchedGroups.push({ id: data.id, name: data.name, decisionNum: data.decisionNum, issueDate: data.issueDate, effectiveDate: data.effectiveDate, order: data.order || 0, subGroups: [] });
           });
 
           sgSnap.forEach((doc) => {
@@ -235,7 +244,7 @@ export default function App() {
       existT.forEach(d => { if (!currentTIds.includes(d.id)) { currentBatch.delete(d.ref); pushOpToBatch(); }});
 
       groups?.forEach((group, gIndex) => {
-        currentBatch.set(doc(groupsCol, group.id), { id: group.id, name: group.name, decisionNum: group.decisionNum || '', issueDate: group.issueDate || '', order: gIndex });
+        currentBatch.set(doc(groupsCol, group.id), { id: group.id, name: group.name, decisionNum: group.decisionNum || '', issueDate: group.issueDate || '', effectiveDate: group.effectiveDate || '', order: gIndex });
         pushOpToBatch();
         group.subGroups?.forEach((sg, sgIndex) => {
           currentBatch.set(doc(subGroupsCol, sg.id), { id: sg.id, name: sg.name, parentGroupId: group.id, order: sgIndex });
@@ -324,8 +333,8 @@ export default function App() {
 
   const handleSaveEdit = () => { if (!editingTech) return; updateTechniqueGlobally(editingTech.id, t => ({ ...t, contentHtml: editContent, isExtracted: true })); setEditingTech(null); };
   const toggleGroup = (id: string) => setExpandedGroups(prev => prev.includes(id) ? prev.filter(gId => gId !== id) : [...prev, id]);
-  const handleAddGroup = (e: React.FormEvent) => { e.preventDefault(); if (!newGroupName.trim()) return; const newGroup: Group = { id: `g-${Date.now()}`, name: newGroupName.trim(), decisionNum: '', issueDate: '', order: groups?.length || 0, subGroups: [] }; setGroups([...(groups||[]), newGroup]); setExpandedGroups([...expandedGroups, newGroup.id]); setNewGroupName(''); };
-  const saveGroupMeta = () => { if (!editingGroupMeta) return; setGroups(prev => prev.map(g => g.id === editingGroupMeta.id ? { ...g, name: editingGroupMeta.name, decisionNum: editingGroupMeta.decisionNum, issueDate: editingGroupMeta.issueDate } : g)); setEditingGroupMeta(null); };
+  const handleAddGroup = (e: React.FormEvent) => { e.preventDefault(); if (!newGroupName.trim()) return; const newGroup: Group = { id: `g-${Date.now()}`, name: newGroupName.trim(), decisionNum: '', issueDate: '', effectiveDate: '', order: groups?.length || 0, subGroups: [] }; setGroups([...(groups||[]), newGroup]); setExpandedGroups([...expandedGroups, newGroup.id]); setNewGroupName(''); };
+  const saveGroupMeta = () => { if (!editingGroupMeta) return; setGroups(prev => prev.map(g => g.id === editingGroupMeta.id ? { ...g, name: editingGroupMeta.name, decisionNum: editingGroupMeta.decisionNum, issueDate: editingGroupMeta.issueDate, effectiveDate: editingGroupMeta.effectiveDate } : g)); setEditingGroupMeta(null); };
   const handleDeleteGroup = (id: string) => { if (confirm("Xóa Nhóm lớn này?")) { setGroups((groups||[]).filter(g => g.id !== id)); if (activeIds.groupId === id) setActiveIds({groupId: null, subGroupId: null}); } };
   const saveNewSubGroup = (groupId: string) => { if (newSubGroupName.trim()) { const newSg: SubGroup = { id: `sg-${Date.now()}`, name: newSubGroupName.trim(), order: groups.find(g=>g.id===groupId)?.subGroups?.length || 0, techniques: [] }; setGroups(prev => prev.map(g => g.id === groupId ? { ...g, subGroups: [...(g.subGroups||[]), newSg] } : g)); setActiveIds({groupId, subGroupId: newSg.id}); setSearchInput(''); setIsMobileMenuOpen(false); } setAddingSubGroupTo(null); setNewSubGroupName(''); };
   const handleDeleteSubGroup = (groupId: string, subGroupId: string) => { if (confirm("Xóa nhóm nhỏ này?")) { setGroups(prev => prev.map(g => g.id === groupId ? { ...g, subGroups: g.subGroups?.filter(sg => sg.id !== subGroupId) || [] } : g)); if (activeIds.subGroupId === subGroupId) setActiveIds({groupId, subGroupId: null}); } };
@@ -424,6 +433,27 @@ export default function App() {
     saveAs(new Blob(['\ufeff', getDocumentHeaderHtml(activeGroup.name, activeGroup) + extractedTechs.map(t => t.contentHtml).join("<br clear=all style='mso-special-character:line-break;page-break-before:always'>") + "</body></html>"], { type: 'application/msword' }), `Quy_Trinh_${activeSubGroup.name.replace(/\s+/g, '_')}.doc`);
   };
 
+  // --- TÍNH NĂNG MỚI: XUẤT TOÀN BỘ NHÓM LỚN (GỘP NHIỀU THƯ MỤC) ---
+  const exportMainGroupToWord = (group: Group, e: React.MouseEvent) => {
+    e.stopPropagation(); 
+    const allTechs = group.subGroups?.flatMap(sg => sg.techniques).filter(t => t.isExtracted) || [];
+    if (allTechs.length === 0) return alert("Nhóm lớn này chưa có kỹ thuật nào được nạp nội dung!");
+
+    let combinedHtml = getDocumentHeaderHtml(group.name, group);
+    group.subGroups.forEach(sg => {
+      const extractedSgTechs = sg.techniques?.filter(t => t.isExtracted) || [];
+      if (extractedSgTechs.length > 0) {
+          // In tên Thư mục nhỏ ra làm dải phân cách giữa các chương
+          combinedHtml += `<h2 style='text-align: center; font-size: 15pt; font-weight: bold; margin-top: 20pt; margin-bottom: 10pt; color: #2563eb;'>--- ${sg.name.toUpperCase()} ---</h2>`;
+          combinedHtml += extractedSgTechs.map(t => t.contentHtml).join("<br clear=all style='mso-special-character:line-break;page-break-before:always'>");
+          combinedHtml += "<br clear=all style='mso-special-character:line-break;page-break-before:always'>";
+      }
+    });
+    combinedHtml += "</body></html>";
+
+    saveAs(new Blob(['\ufeff', combinedHtml], { type: 'application/msword' }), `Quy_Trinh_Nhom_${group.name.replace(/\s+/g, '_')}.doc`);
+  };
+
   const exportSingleToWord = (tech: Technique, group: Group) => { saveAs(new Blob(['\ufeff', getDocumentHeaderHtml(group.name, group) + tech.contentHtml + "</body></html>"], { type: 'application/msword' }), `${stripPrefixNumber(tech.name).replace(/\s+/g, '_')}.doc`); };
   const exportSingleToPdf = (tech: Technique, group: Group) => {
     const printWindow = window.open('', '_blank', 'height=800,width=800');
@@ -440,7 +470,6 @@ export default function App() {
     printWindow.document.close();
   };
 
-  // --- RENDERING TỪNG HÀNG VỚI QUYỀN TRUY CẬP ---
   const renderTechRow = (tech: Technique, group: Group, isGlobalSearch = false, subGroupName = '') => (
     <tr key={tech.id} className="hover:bg-slate-50 transition-colors group/row border-b border-slate-100 last:border-0">
       <td className="px-4 md:px-6 py-4">
@@ -453,11 +482,24 @@ export default function App() {
         ) : (
           <div>
             <div className="flex items-start md:items-center gap-2 flex-col md:flex-row">
-              <span className="font-semibold text-slate-800 text-sm md:text-base leading-snug">{tech.name}</span>
+              {/* TÍNH NĂNG MỚI: HIỂN THỊ THỜI GIAN THỰC HIỆN KHI RÊ CHUỘT (TITLE) */}
+              <span className="font-semibold text-slate-800 text-sm md:text-base leading-snug cursor-help border-b border-dotted border-slate-400" title={getExecutionTime(tech.contentHtml)}>{tech.name}</span>
               {isAdmin && <button onClick={() => startRenaming(tech)} className="opacity-0 group-hover/row:opacity-100 p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all hidden md:block"><Pencil size={14} /></button>}
             </div>
+            
+            {/* TÍNH NĂNG MỚI: TÌM KIẾM NÂNG CAO (HIỂN THỊ METADATA) */}
             {isGlobalSearch && (
-              <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] md:text-[11px] text-slate-500 font-medium"><MapPin size={12} className="text-slate-400 shrink-0" /><span className="bg-slate-100 px-2 py-0.5 rounded">{group.name}</span> / <span className="bg-slate-100 px-2 py-0.5 rounded">{subGroupName}</span></div>
+              <div className="mt-2 flex flex-col gap-1.5 text-[10px] md:text-[11px] text-slate-500 font-medium">
+                <div className="flex flex-wrap items-center gap-1">
+                  <MapPin size={12} className="text-slate-400 shrink-0" />
+                  <span className="bg-slate-100 px-2 py-0.5 rounded shadow-sm">{group.name}</span> / <span className="bg-slate-100 px-2 py-0.5 rounded shadow-sm">{subGroupName}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 ml-4">
+                  <span className="bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-md">QĐ: <b className="font-bold">{group.decisionNum || '---'}</b></span>
+                  <span className="bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-md">Ban hành: <b className="font-bold">{group.issueDate || '---'}</b></span>
+                  <span className="bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded-md">Hiệu lực: <b className="font-bold">{group.effectiveDate || '---'}</b></span>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -468,24 +510,21 @@ export default function App() {
       <td className="px-4 md:px-6 py-4 text-right">
         <div className="flex items-center justify-end gap-1 md:gap-2">
           
-          {/* NÚT XEM/SỬA DỮ LIỆU: Mở cho mọi người nếu đã có nội dung */}
           {(isAdmin || tech.isExtracted) && (
-            <button onClick={() => openEditor(tech)} className={cn("p-1.5 md:p-2 rounded-lg transition-colors", tech.isExtracted ? "bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white" : "bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white")} title={isAdmin && tech.isExtracted ? "Xem và Chỉnh sửa" : isAdmin ? "Tạo thủ công" : "Xem chi tiết"}>
+            <button onClick={() => openEditor(tech)} className={cn("p-1.5 md:p-2 rounded-lg transition-colors shadow-sm", tech.isExtracted ? "bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-100" : "bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white border border-amber-100")} title={isAdmin && tech.isExtracted ? "Xem và Chỉnh sửa" : isAdmin ? "Tạo thủ công" : "Xem chi tiết"}>
               {isAdmin && !tech.isExtracted ? <FilePlus size={16} /> : isAdmin ? <Edit size={16} /> : <Eye size={16} />}
             </button>
           )}
 
-          {/* NÚT XUẤT FILE: Mở cho mọi người nếu đã có nội dung */}
           {tech.isExtracted && (
             <>
-              <button onClick={() => exportSingleToWord(tech, group)} className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-colors" title="Tải file Word"><FileText size={16} /></button>
-              <button onClick={() => exportSingleToPdf(tech, group)} className="p-1.5 md:p-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-600 hover:text-white transition-colors" title="In / Tải PDF"><Printer size={16} /></button>
+              <button onClick={() => exportSingleToWord(tech, group)} className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-colors shadow-sm border border-indigo-100" title="Tải file Word"><FileText size={16} /></button>
+              <button onClick={() => exportSingleToPdf(tech, group)} className="p-1.5 md:p-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-600 hover:text-white transition-colors shadow-sm border border-orange-100" title="In / Tải PDF"><Printer size={16} /></button>
             </>
           )}
 
-          {/* NÚT XÓA: CHỈ ADMIN MỚI THẤY */}
           {isAdmin && (
-            <button onClick={() => deleteTechniqueGlobally(tech.id)} className="p-1.5 md:p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white opacity-100 md:opacity-0 group-hover/row:opacity-100 transition-opacity" title="Xóa"><Trash2 size={16} /></button>
+            <button onClick={() => deleteTechniqueGlobally(tech.id)} className="p-1.5 md:p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white opacity-100 md:opacity-0 group-hover/row:opacity-100 transition-opacity border border-red-100" title="Xóa"><Trash2 size={16} /></button>
           )}
         </div>
       </td>
@@ -501,7 +540,7 @@ export default function App() {
           <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg"><Menu size={24}/></button>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-sm"><Database size={16} /></div>
-            <h1 className="text-lg font-bold text-slate-900 leading-tight">MedFlow Cloud</h1>
+            <h1 className="text-lg font-bold text-slate-900 leading-tight">Phòng Khám Cửu Long</h1>
           </div>
         </div>
       </div>
@@ -514,7 +553,7 @@ export default function App() {
         <div className="p-6 border-b border-slate-100 shrink-0">
           <div className="hidden md:flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-200"><Database size={20} /></div>
-            <div><h1 className="text-xl font-bold text-slate-900 leading-tight">MedFlow Cloud</h1><p className="text-slate-500 text-[11px] font-medium uppercase tracking-wider">Hệ thống Quản lý Quy trình</p></div>
+            <div><h1 className="text-xl font-bold text-slate-900 leading-tight">Phòng Khám Cửu Long</h1><p className="text-slate-500 text-[11px] font-medium uppercase tracking-wider">Hệ thống Quản lý Quy trình</p></div>
           </div>
 
           <div className="relative mb-4">
@@ -551,16 +590,22 @@ export default function App() {
                     <div className="flex items-center gap-1 flex-1" onClick={e => e.stopPropagation()}><input autoFocus type="text" value={editGroupName} onChange={e => setEditGroupName(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveRenamedGroup()} className="border border-blue-400 rounded px-2 py-1 outline-none w-full text-sm font-normal focus:ring-2 focus:ring-blue-100" /><button onClick={saveRenamedGroup} className="p-1 bg-green-100 text-green-600 rounded hover:bg-green-600 hover:text-white"><Check size={14}/></button><button onClick={() => setRenamingGroupId(null)} className="p-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-300"><X size={14}/></button></div>
                   ) : (<span className="truncate text-sm md:text-base">{group.name}</span>)}
                 </div>
-                {renamingGroupId !== group.id && isAdmin && (
-                  <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover/header:opacity-100 transition-opacity shrink-0 ml-2">
-                    {index > 0 && <button onClick={(e) => { e.stopPropagation(); moveGroupUp(index); }} className="p-1 hover:bg-slate-200 text-slate-600 rounded hidden md:block" title="Đẩy lên"><ArrowUp size={14}/></button>}
-                    {index < groups.length - 1 && <button onClick={(e) => { e.stopPropagation(); moveGroupDown(index); }} className="p-1 hover:bg-slate-200 text-slate-600 rounded hidden md:block" title="Kéo xuống"><ArrowDown size={14}/></button>}
-                    <button onClick={(e) => { e.stopPropagation(); startRenamingGroup(group); }} className="p-1.5 hover:bg-amber-100 text-amber-600 rounded-lg" title="Đổi tên Nhóm"><Pencil size={14}/></button>
-                    <button onClick={(e) => { e.stopPropagation(); setEditingGroupMeta(group); }} className="p-1.5 hover:bg-slate-200 text-slate-600 rounded-lg hidden md:block" title="Cập nhật Quyết định"><Settings size={14}/></button>
-                    <button onClick={(e) => { e.stopPropagation(); setAddingSubGroupTo(group.id); if (!expandedGroups.includes(group.id)) toggleGroup(group.id); }} className="p-1.5 hover:bg-blue-100 text-blue-600 rounded-lg" title="Thêm thư mục"><Plus size={14}/></button>
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id); }} className="p-1.5 hover:bg-red-100 text-red-500 rounded-lg hidden md:block" title="Xóa toàn bộ"><Trash2 size={14}/></button>
-                  </div>
-                )}
+                
+                <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover/header:opacity-100 transition-opacity shrink-0 ml-2">
+                  {/* NÚT MỚI: TẢI WORD TOÀN BỘ NHÓM LỚN (Ai cũng tải được) */}
+                  <button onClick={(e) => exportMainGroupToWord(group, e)} className="p-1.5 hover:bg-blue-100 text-blue-600 rounded-lg shadow-sm border border-blue-50" title="Tải toàn bộ file Word Nhóm lớn"><FileDown size={14}/></button>
+                  
+                  {isAdmin && (
+                    <>
+                      {index > 0 && <button onClick={(e) => { e.stopPropagation(); moveGroupUp(index); }} className="p-1 hover:bg-slate-200 text-slate-600 rounded hidden md:block" title="Đẩy lên"><ArrowUp size={14}/></button>}
+                      {index < groups.length - 1 && <button onClick={(e) => { e.stopPropagation(); moveGroupDown(index); }} className="p-1 hover:bg-slate-200 text-slate-600 rounded hidden md:block" title="Kéo xuống"><ArrowDown size={14}/></button>}
+                      <button onClick={(e) => { e.stopPropagation(); startRenamingGroup(group); }} className="p-1.5 hover:bg-amber-100 text-amber-600 rounded-lg" title="Đổi tên Nhóm"><Pencil size={14}/></button>
+                      <button onClick={(e) => { e.stopPropagation(); setEditingGroupMeta(group); }} className="p-1.5 hover:bg-slate-200 text-slate-600 rounded-lg hidden md:block" title="Cập nhật Quyết định"><Settings size={14}/></button>
+                      <button onClick={(e) => { e.stopPropagation(); setAddingSubGroupTo(group.id); if (!expandedGroups.includes(group.id)) toggleGroup(group.id); }} className="p-1.5 hover:bg-blue-100 text-blue-600 rounded-lg" title="Thêm thư mục"><Plus size={14}/></button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id); }} className="p-1.5 hover:bg-red-100 text-red-500 rounded-lg hidden md:block" title="Xóa toàn bộ"><Trash2 size={14}/></button>
+                    </>
+                  )}
+                </div>
               </div>
 
               <AnimatePresence>
@@ -577,7 +622,7 @@ export default function App() {
                           </div>
                           {renamingSubGroupId !== sg.id && (
                             <div className="flex items-center gap-1 shrink-0 ml-2">
-                              <span className="text-[10px] bg-white border border-slate-200 px-1.5 py-0.5 rounded-full text-slate-500">{sg.techniques?.length || 0}</span>
+                              <span className="text-[10px] bg-white border border-slate-200 px-1.5 py-0.5 rounded-full text-slate-500 shadow-sm">{sg.techniques?.length || 0}</span>
                               {isAdmin && (
                                 <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover/item:opacity-100 transition-opacity">
                                   <button onClick={(e) => { e.stopPropagation(); startRenamingSubGroup(sg); }} className="p-1 text-amber-500 hover:bg-amber-100 rounded"><Pencil size={12}/></button>
@@ -599,7 +644,7 @@ export default function App() {
           ))}
         </div>
         
-        {/* NÚT MỞ KHÓA ADMIN QUAY TRỞ LẠI */}
+        {/* NÚT MỞ KHÓA ADMIN */}
         <div className="absolute bottom-[60px] left-4 z-50">
           <button onClick={handleAdminLogin} className={cn("p-3 rounded-full shadow-lg transition-all flex items-center justify-center text-white", isAdmin ? "bg-amber-500 hover:bg-amber-600" : "bg-slate-800 hover:bg-slate-900")} title={isAdmin ? "Đang ở chế độ Admin (Bấm để khóa)" : "Nhập mã để mở chế độ Admin"}>
             {isAdmin ? <Unlock size={18} /> : <Lock size={18} />}
@@ -608,7 +653,7 @@ export default function App() {
 
         <div className="absolute bottom-0 left-0 right-0 p-3 text-center bg-slate-50 border-t border-slate-200">
           <p className="text-[10px] text-slate-400 font-medium leading-tight">
-            © 2026 Cửu Long medflow - Nguyễn Minh Nhật<br/>
+            © 2026 Phát triển bởi Bill Nguyen<br/>Phòng khám Đa khoa Cửu Long
           </p>
         </div>
       </div>
@@ -616,6 +661,7 @@ export default function App() {
       {/* WORKSPACE CHÍNH */}
       <div className="flex-1 flex flex-col md:h-screen overflow-hidden bg-slate-50/50 relative">
         
+        {/* NÚT BẬT TẮT XUẤT KÈM QUYẾT ĐỊNH */}
         <div className="hidden md:flex absolute top-5 right-8 z-20 items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
           <span className="text-sm font-medium text-slate-600">Kèm Số QĐ khi tải file:</span>
           <button onClick={() => setIncludeExportMeta(!includeExportMeta)} className={cn("w-10 h-5 rounded-full relative transition-colors", includeExportMeta ? "bg-blue-600" : "bg-slate-300")}>
@@ -646,10 +692,10 @@ export default function App() {
 
             <div className="flex-1 overflow-y-auto p-4 md:p-8">
               <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 md:gap-0 mb-6">
-                <h3 className="font-bold text-slate-700 text-base md:text-lg">{isAdmin ? "Bảng điều khiển quản trị" : "Tính năng tài liệu"}</h3>
+                <h3 className="font-bold text-slate-700 text-base md:text-lg">{isAdmin ? "Bảng điều khiển quản trị" : "Danh sách tài liệu"}</h3>
                 <div className="flex flex-wrap gap-2 md:gap-3">
-                  {isAdmin && <button onClick={handleDeleteAllTechsInFolder} disabled={!activeSubGroup.techniques || activeSubGroup.techniques.length === 0} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white px-3 md:px-4 py-2 rounded-xl font-bold transition-all disabled:opacity-50 text-xs md:text-sm"><Trash2 size={16} /> Làm sạch</button>}
-                  <button onClick={exportGroupToWord} disabled={!activeSubGroup.techniques || activeSubGroup.techniques.length === 0} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-xl font-bold shadow-md transition-all active:scale-95 disabled:opacity-50 text-xs md:text-sm"><FileDown size={16} /> Tải file Word gộp</button>
+                  {isAdmin && <button onClick={handleDeleteAllTechsInFolder} disabled={!activeSubGroup.techniques || activeSubGroup.techniques.length === 0} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white px-3 md:px-4 py-2 rounded-xl font-bold transition-all disabled:opacity-50 text-xs md:text-sm shadow-sm border border-red-100"><Trash2 size={16} /> Làm sạch</button>}
+                  <button onClick={exportGroupToWord} disabled={!activeSubGroup.techniques || activeSubGroup.techniques.length === 0} className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-xl font-bold shadow-md transition-all active:scale-95 disabled:opacity-50 text-xs md:text-sm"><FileDown size={16} /> Tải file Word Nhóm</button>
                 </div>
               </div>
 
@@ -687,8 +733,8 @@ export default function App() {
               <div className="px-4 md:px-8 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
                 <h3 className="text-base md:text-xl font-bold text-slate-800 flex items-center gap-2 md:gap-3 truncate pr-4"><FileText className="text-blue-600 shrink-0" size={20}/> <span className="truncate">{isAdmin ? "Soạn thảo: " : "Chi tiết: "} {stripPrefixNumber(editingTech.name)}</span></h3>
                 <div className="flex items-center gap-2 shrink-0">
-                  {isAdmin && <button onClick={() => { handleSaveEdit(); }} className="flex items-center gap-1 md:gap-2 bg-green-600 text-white px-3 md:px-5 py-2 rounded-xl font-bold hover:bg-green-700 transition-colors text-xs md:text-sm"><Save size={16} /> <span className="hidden md:inline">Lưu dữ liệu</span></button>}
-                  <button onClick={() => setEditingTech(null)} className="p-2 md:p-2.5 bg-white text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-xl border border-slate-200"><X size={18} /></button>
+                  {isAdmin && <button onClick={() => { handleSaveEdit(); }} className="flex items-center gap-1 md:gap-2 bg-green-600 text-white px-3 md:px-5 py-2 rounded-xl font-bold hover:bg-green-700 transition-colors text-xs md:text-sm shadow-sm"><Save size={16} /> <span className="hidden md:inline">Lưu dữ liệu</span></button>}
+                  <button onClick={() => setEditingTech(null)} className="p-2 md:p-2.5 bg-white text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-xl border border-slate-200 shadow-sm"><X size={18} /></button>
                 </div>
               </div>
               <div className="flex-1 p-4 md:p-8 bg-slate-100 overflow-y-auto">
@@ -714,10 +760,12 @@ export default function App() {
                 <div><label className="block text-sm font-bold text-slate-700 mb-1">Tên Nhóm Lớn</label><input type="text" value={editingGroupMeta.name} onChange={e => setEditingGroupMeta({...editingGroupMeta, name: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500/50 outline-none" disabled /></div>
                 <div><label className="block text-sm font-bold text-slate-700 mb-1">Số Quyết định</label><input type="text" placeholder="VD: 25/QĐ-BYT" value={editingGroupMeta.decisionNum || ''} onChange={e => setEditingGroupMeta({...editingGroupMeta, decisionNum: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500/50 outline-none" /></div>
                 <div><label className="block text-sm font-bold text-slate-700 mb-1">Ngày ban hành</label><input type="text" placeholder="VD: 03/01/2014" value={editingGroupMeta.issueDate || ''} onChange={e => setEditingGroupMeta({...editingGroupMeta, issueDate: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500/50 outline-none" /></div>
+                {/* TÍNH NĂNG MỚI: Ô NHẬP NGÀY HIỆU LỰC */}
+                <div><label className="block text-sm font-bold text-slate-700 mb-1">Ngày hiệu lực</label><input type="text" placeholder="VD: 15/01/2014" value={editingGroupMeta.effectiveDate || ''} onChange={e => setEditingGroupMeta({...editingGroupMeta, effectiveDate: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500/50 outline-none" /></div>
               </div>
               <div className="mt-8 flex justify-end gap-3">
                 <button onClick={() => setEditingGroupMeta(null)} className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl text-sm">Hủy</button>
-                <button onClick={saveGroupMeta} className="px-6 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl text-sm">Lưu lại</button>
+                <button onClick={saveGroupMeta} className="px-6 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl text-sm shadow-md">Lưu lại</button>
               </div>
             </motion.div>
           </motion.div>
