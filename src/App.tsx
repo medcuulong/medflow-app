@@ -45,15 +45,46 @@ const stripPrefixNumber = (str: string) => {
   return str.replace(/^\d+[\.\-\s]*/, '').trim();
 };
 
-// --- HÀM BÓC TÁCH THỜI GIAN THỰC HIỆN ĐỂ HIỂN THỊ KHI RÊ CHUỘT ---
+// ============================================================================
+// 🔥 LOGIC CẤP VIP PRO: MÁY QUÉT TẦM NHIỆT TÌM THỜI GIAN THỰC HIỆN
+// ============================================================================
 const getExecutionTime = (html: string) => {
   if (!html) return "Chưa có nội dung";
-  // Xóa sạch mã HTML để lấy Text thô
-  const text = html.replace(/<[^>]*>?/gm, ''); 
-  // Quét tìm cụm từ thời gian thực hiện, dừng lại ở dấu chấm hoặc xuống dòng
-  const match = text.match(/(?:Thời gian thực hiện(?: kỹ thuật)?\s*:)([^.\n]+)/i);
-  return match ? `Thời gian thực hiện: ${match[1].trim()}` : "Không tìm thấy thông tin thời gian";
+  try {
+    // 1. Phục dựng DOM ẩn để tránh vỡ chữ do HTML tags
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    
+    // 2. Chỉ chắt lọc các thẻ văn bản từng câu một
+    const elements = Array.from(doc.body.querySelectorAll('p, li, div, span, h1, h2, h3, h4'));
+    
+    for (const el of elements) {
+      const text = el.textContent?.trim() || '';
+      
+      // Bỏ qua rác hoặc các đoạn văn quá dài (Thời gian thực hiện không bao giờ dài quá 200 ký tự)
+      if (!text || text.length > 200) continue; 
+      
+      const lowerText = text.toLowerCase();
+      
+      // 3. Lưới lọc từ khóa đa biến thể
+      if (lowerText.includes('thời gian thực hiện') || lowerText.includes('thời gian tiến hành') || lowerText.includes('thời gian:')) {
+        
+        // Cắt lấy phần sau dấu 2 chấm
+        const match = text.match(/thời gian[^:]*:\s*(.*)/i);
+        if (match && match[1]) {
+          return `⏳ Thời gian: ${match[1].trim().replace(/\.$/, '')}`; // Xóa dấu chấm cuối cùng nếu có
+        } else {
+          // Xử lý ca khó: BYT quên viết dấu ":" -> Cắt bỏ số thứ tự mục lục ở đầu câu (Ví dụ: "2.6.", "III.", "c)")
+          const cleanText = text.replace(/^([IVXLCDM]+\.|[a-z]\)|\d+(\.\d+)*\.?)\s*/i, '').trim();
+          return `⏳ ${cleanText}`;
+        }
+      }
+    }
+    return "⏳ Không tìm thấy thông tin thời gian";
+  } catch (e) {
+    return "⏳ Lỗi đọc dữ liệu";
+  }
 };
+// ============================================================================
 
 // --- KIỂU DỮ LIỆU ---
 interface Technique { id: string; name: string; contentHtml: string; isExtracted: boolean; }
@@ -62,6 +93,7 @@ interface Group { id: string; name: string; decisionNum?: string; issueDate?: st
 interface SearchResult extends Technique { group: Group; subGroup: SubGroup; }
 
 export default function App() {
+  // --- PHÂN QUYỀN ADMIN VÀ GIAO DIỆN MOBILE ---
   const [isAdmin, setIsAdmin] = useState(false); 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); 
 
@@ -79,6 +111,7 @@ export default function App() {
     }
   };
 
+  // ÁO GIÁP 1: BẢO VỆ LÚC KHỞI TẠO TỪ LOCAL STORAGE
   const [groups, setGroups] = useState<Group[]>(() => {
     const savedData = localStorage.getItem('medflow_local_backup');
     if (savedData) {
@@ -154,7 +187,6 @@ export default function App() {
         if (!gSnap.empty || !sgSnap.empty || !tSnap.empty) {
           gSnap.forEach((doc) => {
             const data = doc.data();
-            // Cập nhật thêm trường effectiveDate (Ngày hiệu lực)
             fetchedGroups.push({ id: data.id, name: data.name, decisionNum: data.decisionNum, issueDate: data.issueDate, effectiveDate: data.effectiveDate, order: data.order || 0, subGroups: [] });
           });
 
@@ -433,7 +465,6 @@ export default function App() {
     saveAs(new Blob(['\ufeff', getDocumentHeaderHtml(activeGroup.name, activeGroup) + extractedTechs.map(t => t.contentHtml).join("<br clear=all style='mso-special-character:line-break;page-break-before:always'>") + "</body></html>"], { type: 'application/msword' }), `Quy_Trinh_${activeSubGroup.name.replace(/\s+/g, '_')}.doc`);
   };
 
-  // --- TÍNH NĂNG MỚI: XUẤT TOÀN BỘ NHÓM LỚN (GỘP NHIỀU THƯ MỤC) ---
   const exportMainGroupToWord = (group: Group, e: React.MouseEvent) => {
     e.stopPropagation(); 
     const allTechs = group.subGroups?.flatMap(sg => sg.techniques).filter(t => t.isExtracted) || [];
@@ -443,7 +474,6 @@ export default function App() {
     group.subGroups.forEach(sg => {
       const extractedSgTechs = sg.techniques?.filter(t => t.isExtracted) || [];
       if (extractedSgTechs.length > 0) {
-          // In tên Thư mục nhỏ ra làm dải phân cách giữa các chương
           combinedHtml += `<h2 style='text-align: center; font-size: 15pt; font-weight: bold; margin-top: 20pt; margin-bottom: 10pt; color: #2563eb;'>--- ${sg.name.toUpperCase()} ---</h2>`;
           combinedHtml += extractedSgTechs.map(t => t.contentHtml).join("<br clear=all style='mso-special-character:line-break;page-break-before:always'>");
           combinedHtml += "<br clear=all style='mso-special-character:line-break;page-break-before:always'>";
@@ -482,12 +512,10 @@ export default function App() {
         ) : (
           <div>
             <div className="flex items-start md:items-center gap-2 flex-col md:flex-row">
-              {/* TÍNH NĂNG MỚI: HIỂN THỊ THỜI GIAN THỰC HIỆN KHI RÊ CHUỘT (TITLE) */}
               <span className="font-semibold text-slate-800 text-sm md:text-base leading-snug cursor-help border-b border-dotted border-slate-400" title={getExecutionTime(tech.contentHtml)}>{tech.name}</span>
               {isAdmin && <button onClick={() => startRenaming(tech)} className="opacity-0 group-hover/row:opacity-100 p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all hidden md:block"><Pencil size={14} /></button>}
             </div>
             
-            {/* TÍNH NĂNG MỚI: TÌM KIẾM NÂNG CAO (HIỂN THỊ METADATA) */}
             {isGlobalSearch && (
               <div className="mt-2 flex flex-col gap-1.5 text-[10px] md:text-[11px] text-slate-500 font-medium">
                 <div className="flex flex-wrap items-center gap-1">
@@ -592,7 +620,6 @@ export default function App() {
                 </div>
                 
                 <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover/header:opacity-100 transition-opacity shrink-0 ml-2">
-                  {/* NÚT MỚI: TẢI WORD TOÀN BỘ NHÓM LỚN (Ai cũng tải được) */}
                   <button onClick={(e) => exportMainGroupToWord(group, e)} className="p-1.5 hover:bg-blue-100 text-blue-600 rounded-lg shadow-sm border border-blue-50" title="Tải toàn bộ file Word Nhóm lớn"><FileDown size={14}/></button>
                   
                   {isAdmin && (
@@ -760,7 +787,6 @@ export default function App() {
                 <div><label className="block text-sm font-bold text-slate-700 mb-1">Tên Nhóm Lớn</label><input type="text" value={editingGroupMeta.name} onChange={e => setEditingGroupMeta({...editingGroupMeta, name: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500/50 outline-none" disabled /></div>
                 <div><label className="block text-sm font-bold text-slate-700 mb-1">Số Quyết định</label><input type="text" placeholder="VD: 25/QĐ-BYT" value={editingGroupMeta.decisionNum || ''} onChange={e => setEditingGroupMeta({...editingGroupMeta, decisionNum: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500/50 outline-none" /></div>
                 <div><label className="block text-sm font-bold text-slate-700 mb-1">Ngày ban hành</label><input type="text" placeholder="VD: 03/01/2014" value={editingGroupMeta.issueDate || ''} onChange={e => setEditingGroupMeta({...editingGroupMeta, issueDate: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500/50 outline-none" /></div>
-                {/* TÍNH NĂNG MỚI: Ô NHẬP NGÀY HIỆU LỰC */}
                 <div><label className="block text-sm font-bold text-slate-700 mb-1">Ngày hiệu lực</label><input type="text" placeholder="VD: 15/01/2014" value={editingGroupMeta.effectiveDate || ''} onChange={e => setEditingGroupMeta({...editingGroupMeta, effectiveDate: e.target.value})} className="w-full border border-slate-200 rounded-xl px-4 py-2 focus:ring-2 focus:ring-blue-500/50 outline-none" /></div>
               </div>
               <div className="mt-8 flex justify-end gap-3">
