@@ -565,7 +565,7 @@ export default function App() {
           <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg"><Menu size={24}/></button>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-sm"><Database size={16} /></div>
-            <h1 className="text-lg font-bold text-slate-900 leading-tight">Phòng Khám Cửu Long</h1>
+            <h1 className="text-lg font-bold text-slate-900 leading-tight">MedFlow Claud</h1>
           </div>
         </div>
       </div>
@@ -578,7 +578,7 @@ export default function App() {
         <div className="p-6 border-b border-slate-100 shrink-0">
           <div className="hidden md:flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-200"><Database size={20} /></div>
-            <div><h1 className="text-xl font-bold text-slate-900 leading-tight">Phòng Khám Cửu Long</h1><p className="text-slate-500 text-[11px] font-medium uppercase tracking-wider">Hệ thống Quản lý Quy trình</p></div>
+            <div><h1 className="text-xl font-bold text-slate-900 leading-tight">MedFlow Claud</h1><p className="text-slate-500 text-[11px] font-medium uppercase tracking-wider">Hệ thống Quản lý Quy trình</p></div>
           </div>
 
           <div className="relative mb-4">
@@ -677,7 +677,7 @@ export default function App() {
 
         <div className="absolute bottom-0 left-0 right-0 p-3 text-center bg-slate-50 border-t border-slate-200">
           <p className="text-[10px] text-slate-400 font-medium leading-tight">
-            © 2026 Phát triển bởi Bill Nguyen<br/>Phòng khám Đa khoa Cửu Long
+            © 2026 Cửu Long medflow - Nguyễn Minh Nhật<br/>Cửu Long Polyclinic
           </p>
         </div>
       </div>
