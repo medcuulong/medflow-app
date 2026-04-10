@@ -93,7 +93,7 @@ export default function App() {
       if (confirm("Bạn muốn khóa quyền Quản trị (Trở về chế độ xem)?")) setIsAdmin(false);
       return;
     }
-    const pwd = prompt("NHẬP MẬT KHẨU QUẢN TRỊ VIÊN:\n(Mặc định là 123456)");
+    const pwd = prompt("NHẬP MẬT KHẨU QUẢN TRỊ VIÊN:\n");
     if (pwd === "123456") { 
       setIsAdmin(true);
       alert("Mở khóa thành công! Các chức năng chỉnh sửa đã hiện ra.");
