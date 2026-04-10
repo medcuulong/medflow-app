@@ -62,7 +62,7 @@ export default function App() {
       return;
     }
     const pwd = prompt("NHẬP MẬT KHẨU QUẢN TRỊ VIÊN:\n(Mặc định là 123456)");
-    if (pwd === "123456") { 
+    if (pwd === "Cuulong@2026") { 
       setIsAdmin(true);
       alert("Mở khóa thành công! Các chức năng chỉnh sửa đã hiện ra.");
     } else if (pwd !== null) {
@@ -315,8 +315,11 @@ export default function App() {
 
   const openEditor = (tech: Technique) => {
     setEditingTech(tech);
-    if (tech.isExtracted && tech.contentHtml) setEditContent(tech.contentHtml);
-    else setEditContent(`<h1 style='text-align: center; font-size: 16pt; font-weight: bold; text-transform: uppercase;'>${stripPrefixNumber(tech.name)}</h1><p><strong>1. ĐẠI CƯƠNG</strong></p><p><br></p><p><strong>2. CHỈ ĐỊNH</strong></p><p><br></p><p><strong>3. CHỐNG CHỈ ĐỊNH</strong></p><p><br></p><p><strong>4. THẬN TRỌNG</strong></p><p><br></p><p><strong>5. CHUẨN BỊ</strong></p><p><br></p><p><strong>6. CÁC BƯỚC TIẾN HÀNH</strong></p><p><br></p><p><strong>7. THEO DÕI VÀ XỬ TRÍ TAI BIẾN</strong></p><p><br></p>`);
+    if (tech.isExtracted && tech.contentHtml) {
+      setEditContent(tech.contentHtml);
+    } else if (isAdmin) {
+      setEditContent(`<h1 style='text-align: center; font-size: 16pt; font-weight: bold; text-transform: uppercase;'>${stripPrefixNumber(tech.name)}</h1><p><strong>1. ĐẠI CƯƠNG</strong></p><p><br></p><p><strong>2. CHỈ ĐỊNH</strong></p><p><br></p><p><strong>3. CHỐNG CHỈ ĐỊNH</strong></p><p><br></p><p><strong>4. THẬN TRỌNG</strong></p><p><br></p><p><strong>5. CHUẨN BỊ</strong></p><p><br></p><p><strong>6. CÁC BƯỚC TIẾN HÀNH</strong></p><p><br></p><p><strong>7. THEO DÕI VÀ XỬ TRÍ TAI BIẾN</strong></p><p><br></p>`);
+    }
   };
 
   const handleSaveEdit = () => { if (!editingTech) return; updateTechniqueGlobally(editingTech.id, t => ({ ...t, contentHtml: editContent, isExtracted: true })); setEditingTech(null); };
@@ -437,6 +440,7 @@ export default function App() {
     printWindow.document.close();
   };
 
+  // --- RENDERING TỪNG HÀNG VỚI QUYỀN TRUY CẬP ---
   const renderTechRow = (tech: Technique, group: Group, isGlobalSearch = false, subGroupName = '') => (
     <tr key={tech.id} className="hover:bg-slate-50 transition-colors group/row border-b border-slate-100 last:border-0">
       <td className="px-4 md:px-6 py-4">
@@ -463,12 +467,26 @@ export default function App() {
       </td>
       <td className="px-4 md:px-6 py-4 text-right">
         <div className="flex items-center justify-end gap-1 md:gap-2">
-          <button onClick={() => openEditor(tech)} className={cn("p-1.5 md:p-2 rounded-lg transition-colors", tech.isExtracted ? "bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white" : "bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white")} title={isAdmin && tech.isExtracted ? "Xem/Sửa" : isAdmin ? "Tạo thủ công" : "Xem chi tiết"}>
-            {isAdmin && !tech.isExtracted ? <FilePlus size={16} /> : isAdmin ? <Edit size={16} /> : <Eye size={16} />}
-          </button>
-          <button onClick={() => exportSingleToWord(tech, group)} disabled={!tech.isExtracted} className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white disabled:opacity-30" title="Tải file Word"><FileText size={16} /></button>
-          <button onClick={() => exportSingleToPdf(tech, group)} disabled={!tech.isExtracted} className="p-1.5 md:p-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-600 hover:text-white disabled:opacity-30" title="In / Tải PDF"><Printer size={16} /></button>
-          {isAdmin && <button onClick={() => deleteTechniqueGlobally(tech.id)} className="p-1.5 md:p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white opacity-100 md:opacity-0 group-hover/row:opacity-100 transition-opacity" title="Xóa"><Trash2 size={16} /></button>}
+          
+          {/* NÚT XEM/SỬA DỮ LIỆU: Mở cho mọi người nếu đã có nội dung */}
+          {(isAdmin || tech.isExtracted) && (
+            <button onClick={() => openEditor(tech)} className={cn("p-1.5 md:p-2 rounded-lg transition-colors", tech.isExtracted ? "bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white" : "bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white")} title={isAdmin && tech.isExtracted ? "Xem và Chỉnh sửa" : isAdmin ? "Tạo thủ công" : "Xem chi tiết"}>
+              {isAdmin && !tech.isExtracted ? <FilePlus size={16} /> : isAdmin ? <Edit size={16} /> : <Eye size={16} />}
+            </button>
+          )}
+
+          {/* NÚT XUẤT FILE: Mở cho mọi người nếu đã có nội dung */}
+          {tech.isExtracted && (
+            <>
+              <button onClick={() => exportSingleToWord(tech, group)} className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-600 hover:text-white transition-colors" title="Tải file Word"><FileText size={16} /></button>
+              <button onClick={() => exportSingleToPdf(tech, group)} className="p-1.5 md:p-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-600 hover:text-white transition-colors" title="In / Tải PDF"><Printer size={16} /></button>
+            </>
+          )}
+
+          {/* NÚT XÓA: CHỈ ADMIN MỚI THẤY */}
+          {isAdmin && (
+            <button onClick={() => deleteTechniqueGlobally(tech.id)} className="p-1.5 md:p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white opacity-100 md:opacity-0 group-hover/row:opacity-100 transition-opacity" title="Xóa"><Trash2 size={16} /></button>
+          )}
         </div>
       </td>
     </tr>
@@ -483,7 +501,7 @@ export default function App() {
           <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg"><Menu size={24}/></button>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-sm"><Database size={16} /></div>
-            <h1 className="text-lg font-bold text-slate-900 leading-tight">Phòng Khám Cửu Long</h1>
+            <h1 className="text-lg font-bold text-slate-900 leading-tight">MedFlow Cloud</h1>
           </div>
         </div>
       </div>
@@ -581,17 +599,16 @@ export default function App() {
           ))}
         </div>
         
-        {/* NÚT MỞ KHÓA ADMIN Ở GÓC DƯỚI TRÁI */}
+        {/* NÚT MỞ KHÓA ADMIN QUAY TRỞ LẠI */}
         <div className="absolute bottom-[60px] left-4 z-50">
           <button onClick={handleAdminLogin} className={cn("p-3 rounded-full shadow-lg transition-all flex items-center justify-center text-white", isAdmin ? "bg-amber-500 hover:bg-amber-600" : "bg-slate-800 hover:bg-slate-900")} title={isAdmin ? "Đang ở chế độ Admin (Bấm để khóa)" : "Nhập mã để mở chế độ Admin"}>
             {isAdmin ? <Unlock size={18} /> : <Lock size={18} />}
           </button>
         </div>
 
-        {/* THÊM ĐOẠN CODE BẢN QUYỀN NÀY VÀO ĐÂY */}
         <div className="absolute bottom-0 left-0 right-0 p-3 text-center bg-slate-50 border-t border-slate-200">
           <p className="text-[10px] text-slate-400 font-medium leading-tight">
-            © 2026 Cửu Long medflow - Nguyễn Minh Nhật<br/>
+            © 2026 Cửu Long medflow - Nguyễn Minh Nhật<br/>MedFlow Cloud
           </p>
         </div>
       </div>
@@ -599,7 +616,6 @@ export default function App() {
       {/* WORKSPACE CHÍNH */}
       <div className="flex-1 flex flex-col md:h-screen overflow-hidden bg-slate-50/50 relative">
         
-        {/* NÚT BẬT TẮT XUẤT KÈM QUYẾT ĐỊNH */}
         <div className="hidden md:flex absolute top-5 right-8 z-20 items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm">
           <span className="text-sm font-medium text-slate-600">Kèm Số QĐ khi tải file:</span>
           <button onClick={() => setIncludeExportMeta(!includeExportMeta)} className={cn("w-10 h-5 rounded-full relative transition-colors", includeExportMeta ? "bg-blue-600" : "bg-slate-300")}>
@@ -669,7 +685,7 @@ export default function App() {
           <motion.div initial={{opacity: 0}} animate={{opacity: 1}} exit={{opacity: 0}} className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-6 bg-slate-900/60 backdrop-blur-sm">
             <motion.div initial={{scale: 0.95, opacity: 0, y: 20}} animate={{scale: 1, opacity: 1, y: 0}} exit={{scale: 0.95, opacity: 0, y: 20}} className="bg-white rounded-2xl md:rounded-3xl shadow-2xl w-full max-w-5xl h-[90vh] md:h-[90vh] flex flex-col overflow-hidden">
               <div className="px-4 md:px-8 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 shrink-0">
-                <h3 className="text-base md:text-xl font-bold text-slate-800 flex items-center gap-2 md:gap-3 truncate pr-4"><FileText className="text-blue-600 shrink-0" size={20}/> <span className="truncate">{isAdmin ? "Soạn thảo: " : "Nội dung: "} {stripPrefixNumber(editingTech.name)}</span></h3>
+                <h3 className="text-base md:text-xl font-bold text-slate-800 flex items-center gap-2 md:gap-3 truncate pr-4"><FileText className="text-blue-600 shrink-0" size={20}/> <span className="truncate">{isAdmin ? "Soạn thảo: " : "Chi tiết: "} {stripPrefixNumber(editingTech.name)}</span></h3>
                 <div className="flex items-center gap-2 shrink-0">
                   {isAdmin && <button onClick={() => { handleSaveEdit(); }} className="flex items-center gap-1 md:gap-2 bg-green-600 text-white px-3 md:px-5 py-2 rounded-xl font-bold hover:bg-green-700 transition-colors text-xs md:text-sm"><Save size={16} /> <span className="hidden md:inline">Lưu dữ liệu</span></button>}
                   <button onClick={() => setEditingTech(null)} className="p-2 md:p-2.5 bg-white text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-xl border border-slate-200"><X size={18} /></button>
@@ -685,7 +701,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* MODAL CÀI ĐẶT NHÓM LỚN */}
+      {/* MODAL CÀI ĐẶT NHÓM LỚN (CHỈ DÀNH CHO ADMIN) */}
       <AnimatePresence>
         {editingGroupMeta && isAdmin && (
           <motion.div initial={{opacity: 0}} animate={{opacity: 1}} exit={{opacity: 0}} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
