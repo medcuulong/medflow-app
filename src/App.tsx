@@ -46,31 +46,48 @@ const stripPrefixNumber = (str: string) => {
 };
 
 // ============================================================================
-// 🔥 LOGIC CẤP VIP PRO: CỖ MÁY NGHIỀN HTML & LƯỚI LỌC REGEX SIÊU BÁM
+// 🔥 LOGIC VIP PRO: ĐỌC TỪNG DÒNG + ÉP KIỂU KHOẢNG TRẮNG ẢO (NBSP)
 // ============================================================================
 const getExecutionTime = (html: string) => {
   if (!html) return "Chưa có nội dung";
   try {
-    // 1. NGHIỀN NÁT HTML: Lột sạch mọi thẻ ẩn (b, span, p, div) và ép thành text phẳng
-    // Thay thế toàn bộ thẻ bằng 1 khoảng trắng để chữ không bao giờ bị dính chùm
-    const plainText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-
-    // 2. LƯỚI LỌC 1 (CÓ DẤU HAI CHẤM): 
-    // Tìm cụm "Thời gian thực hiện", tóm mọi thứ sau dấu ":" cho đến khi gặp chữ phút/giờ/ngày/giây
-    // Đoạn {1,80}? là để tóm đoạn văn ngắn nhất chứa thời gian, tránh quét nhầm qua mục khác
-    const matchColon = plainText.match(/(?:thời gian thực hiện|thời gian tiến hành)[^:]*:\s*(.{1,80}?(?:phút|giờ|ngày|giây))/i);
-    if (matchColon && matchColon[1]) {
-      return `⏳ Thời gian: ${matchColon[1].trim()}`;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    
+    // Lấy tất cả các dòng văn bản (paragraph, list item, table cell)
+    const elements = Array.from(doc.body.querySelectorAll('p, div, li, td, h1, h2, h3, h4'));
+    
+    for (const el of elements) {
+      // ÉP KIỂU: Biến mọi khoảng trắng ảo (tab, newline, &nbsp;) thành 1 khoảng trắng chuẩn duy nhất
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      
+      // Lọc rác: Thời gian thực hiện chỉ nằm trên 1 dòng ngắn (dưới 250 ký tự)
+      if (!text || text.length > 250) continue;
+      
+      const lowerText = text.toLowerCase();
+      
+      // Nếu dòng này chứa đúng từ khóa
+      if (lowerText.includes('thời gian thực hiện') || lowerText.includes('thời gian tiến hành')) {
+        
+        // Tách đôi câu bằng dấu hai chấm ":"
+        const parts = text.split(':');
+        if (parts.length > 1) {
+          // Lấy toàn bộ phần đuôi sau dấu hai chấm
+          let timeString = parts.slice(1).join(':').trim();
+          // Quét sạch dấu chấm kết câu nếu có
+          timeString = timeString.replace(/\.$/, '');
+          
+          if (timeString) return `⏳ Thời gian: ${timeString}`;
+        } else {
+          // Đề phòng bác sĩ quên gõ dấu ":"
+          const match = text.match(/(?:thời gian thực hiện(?: kỹ thuật)?|thời gian tiến hành)\s*(.*)/i);
+          if (match && match[1]) {
+            return `⏳ Thời gian: ${match[1].trim().replace(/\.$/, '')}`;
+          }
+        }
+      }
     }
-
-    // 3. LƯỚI LỌC 2 (KHÔNG CÓ DẤU HAI CHẤM): 
-    // Đề phòng trường hợp bác sĩ/điều dưỡng gõ Word quên dấu ":"
-    const matchNoColon = plainText.match(/(?:thời gian thực hiện|thời gian tiến hành)\s+(.{1,80}?(?:phút|giờ|ngày|giây))/i);
-    if (matchNoColon && matchNoColon[1]) {
-      return `⏳ Thời gian: ${matchNoColon[1].trim()}`;
-    }
-
-    return "⏳ Không tìm thấy thông tin thời gian";
+    return "⏳ Chưa xác định được thời gian";
   } catch (e) {
     return "⏳ Lỗi đọc dữ liệu";
   }
@@ -84,7 +101,6 @@ interface Group { id: string; name: string; decisionNum?: string; issueDate?: st
 interface SearchResult extends Technique { group: Group; subGroup: SubGroup; }
 
 export default function App() {
-  // --- PHÂN QUYỀN ADMIN VÀ GIAO DIỆN MOBILE ---
   const [isAdmin, setIsAdmin] = useState(false); 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); 
 
@@ -93,7 +109,7 @@ export default function App() {
       if (confirm("Bạn muốn khóa quyền Quản trị (Trở về chế độ xem)?")) setIsAdmin(false);
       return;
     }
-    const pwd = prompt("NHẬP MẬT KHẨU QUẢN TRỊ VIÊN:");
+    const pwd = prompt("NHẬP MẬT KHẨU QUẢN TRỊ VIÊN:\n(Mặc định là 123456)");
     if (pwd === "123456") { 
       setIsAdmin(true);
       alert("Mở khóa thành công! Các chức năng chỉnh sửa đã hiện ra.");
@@ -502,7 +518,6 @@ export default function App() {
         ) : (
           <div>
             <div className="flex items-start md:items-center gap-2 flex-col md:flex-row">
-              {/* ÁP DỤNG HÀM GET-EXECUTION-TIME VIP PRO VÀO ĐÂY */}
               <span className="font-semibold text-slate-800 text-sm md:text-base leading-snug cursor-help border-b border-dotted border-slate-400" title={getExecutionTime(tech.contentHtml)}>{tech.name}</span>
               {isAdmin && <button onClick={() => startRenaming(tech)} className="opacity-0 group-hover/row:opacity-100 p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all hidden md:block"><Pencil size={14} /></button>}
             </div>
@@ -559,7 +574,7 @@ export default function App() {
           <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-lg"><Menu size={24}/></button>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white shadow-sm"><Database size={16} /></div>
-            <h1 className="text-lg font-bold text-slate-900 leading-tight">MedFlow Claud</h1>
+            <h1 className="text-lg font-bold text-slate-900 leading-tight">Phòng Khám Cửu Long</h1>
           </div>
         </div>
       </div>
@@ -572,7 +587,7 @@ export default function App() {
         <div className="p-6 border-b border-slate-100 shrink-0">
           <div className="hidden md:flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-blue-200"><Database size={20} /></div>
-            <div><h1 className="text-xl font-bold text-slate-900 leading-tight">MedFlow Claud</h1><p className="text-slate-500 text-[11px] font-medium uppercase tracking-wider">Hệ thống Quản lý Quy trình</p></div>
+            <div><h1 className="text-xl font-bold text-slate-900 leading-tight">Phòng Khám Cửu Long</h1><p className="text-slate-500 text-[11px] font-medium uppercase tracking-wider">Hệ thống Quản lý Quy trình</p></div>
           </div>
 
           <div className="relative mb-4">
@@ -671,7 +686,7 @@ export default function App() {
 
         <div className="absolute bottom-0 left-0 right-0 p-3 text-center bg-slate-50 border-t border-slate-200">
           <p className="text-[10px] text-slate-400 font-medium leading-tight">
-            © 2026 Cửu Long Polyclinic - Nguyễn Minh Nhật<br/>
+            © 2026 Phát triển bởi Bill Nguyen<br/>Phòng khám Đa khoa Cửu Long
           </p>
         </div>
       </div>
