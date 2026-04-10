@@ -46,38 +46,31 @@ const stripPrefixNumber = (str: string) => {
 };
 
 // ============================================================================
-// 🔥 LOGIC CẤP VIP PRO: MÁY QUÉT DOM TÌM THỜI GIAN THỰC HIỆN
+// 🔥 LOGIC CẤP VIP PRO: CỖ MÁY NGHIỀN HTML & LƯỚI LỌC REGEX SIÊU BÁM
 // ============================================================================
 const getExecutionTime = (html: string) => {
   if (!html) return "Chưa có nội dung";
   try {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    
-    // Lấy tất cả các thẻ có khả năng chứa đoạn văn bản thời gian
-    const elements = Array.from(doc.body.querySelectorAll('p, div, li, td, h1, h2, h3, h4'));
-    
-    for (const el of elements) {
-      // Lấy textContent bảo toàn khoảng trắng, loại bỏ HTML ẩn
-      const text = el.textContent?.trim() || '';
-      if (!text || text.length > 200) continue; // Bỏ qua đoạn quá dài
-      
-      const lowerText = text.toLowerCase();
-      
-      // Nhận diện dòng chứa thời gian thực hiện
-      if (lowerText.includes('thời gian thực hiện') || lowerText.includes('thời gian tiến hành')) {
-        // Bắt mọi thứ sau dấu ":"
-        const match = text.match(/(?:thời gian thực hiện(?: kỹ thuật)?|thời gian tiến hành)[^:]*:\s*(.*)/i);
-        if (match && match[1]) {
-          return `⏳ Thời gian: ${match[1].trim().replace(/\.$/, '')}`;
-        } else {
-          // Trường hợp BYT gõ thiếu dấu ":"
-          const cleanText = text.replace(/^.*?(thời gian thực hiện(?: kỹ thuật)?|thời gian tiến hành)\s*/i, '').trim();
-          if (cleanText) return `⏳ Thời gian: ${cleanText.replace(/\.$/, '')}`;
-        }
-      }
+    // 1. NGHIỀN NÁT HTML: Lột sạch mọi thẻ ẩn (b, span, p, div) và ép thành text phẳng
+    // Thay thế toàn bộ thẻ bằng 1 khoảng trắng để chữ không bao giờ bị dính chùm
+    const plainText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+
+    // 2. LƯỚI LỌC 1 (CÓ DẤU HAI CHẤM): 
+    // Tìm cụm "Thời gian thực hiện", tóm mọi thứ sau dấu ":" cho đến khi gặp chữ phút/giờ/ngày/giây
+    // Đoạn {1,80}? là để tóm đoạn văn ngắn nhất chứa thời gian, tránh quét nhầm qua mục khác
+    const matchColon = plainText.match(/(?:thời gian thực hiện|thời gian tiến hành)[^:]*:\s*(.{1,80}?(?:phút|giờ|ngày|giây))/i);
+    if (matchColon && matchColon[1]) {
+      return `⏳ Thời gian: ${matchColon[1].trim()}`;
     }
-    return "⏳ Chưa xác định được thời gian";
+
+    // 3. LƯỚI LỌC 2 (KHÔNG CÓ DẤU HAI CHẤM): 
+    // Đề phòng trường hợp bác sĩ/điều dưỡng gõ Word quên dấu ":"
+    const matchNoColon = plainText.match(/(?:thời gian thực hiện|thời gian tiến hành)\s+(.{1,80}?(?:phút|giờ|ngày|giây))/i);
+    if (matchNoColon && matchNoColon[1]) {
+      return `⏳ Thời gian: ${matchNoColon[1].trim()}`;
+    }
+
+    return "⏳ Không tìm thấy thông tin thời gian";
   } catch (e) {
     return "⏳ Lỗi đọc dữ liệu";
   }
@@ -109,7 +102,6 @@ export default function App() {
     }
   };
 
-  // ÁO GIÁP 1: BẢO VỆ LÚC KHỞI TẠO TỪ LOCAL STORAGE
   const [groups, setGroups] = useState<Group[]>(() => {
     const savedData = localStorage.getItem('medflow_local_backup');
     if (savedData) {
@@ -170,7 +162,7 @@ export default function App() {
     }
   }, [groups]);
 
-  // --- TẢI DATA TỪ FIREBASE KÈM ÁO GIÁP CHỐNG LỖI ---
+  // --- TẢI DATA TỪ FIREBASE ---
   useEffect(() => {
     const fetchCloudData = async () => {
       try {
@@ -415,6 +407,7 @@ export default function App() {
     reader.readAsBinaryString(acceptedFiles[0]);
   }, [activeSubGroup]);
 
+  // CẮT HÌNH ẢNH + TÍNH TOÁN TRƯỚC GIẢM TẢI CHO CPU
   const onDropWord = useCallback(async (acceptedFiles: File[]) => {
     if (!activeSubGroup || activeSubGroup.techniques?.length === 0) return alert("Hãy nạp danh sách Excel trước!");
     setIsProcessing(true);
@@ -509,6 +502,7 @@ export default function App() {
         ) : (
           <div>
             <div className="flex items-start md:items-center gap-2 flex-col md:flex-row">
+              {/* ÁP DỤNG HÀM GET-EXECUTION-TIME VIP PRO VÀO ĐÂY */}
               <span className="font-semibold text-slate-800 text-sm md:text-base leading-snug cursor-help border-b border-dotted border-slate-400" title={getExecutionTime(tech.contentHtml)}>{tech.name}</span>
               {isAdmin && <button onClick={() => startRenaming(tech)} className="opacity-0 group-hover/row:opacity-100 p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all hidden md:block"><Pencil size={14} /></button>}
             </div>
@@ -677,7 +671,7 @@ export default function App() {
 
         <div className="absolute bottom-0 left-0 right-0 p-3 text-center bg-slate-50 border-t border-slate-200">
           <p className="text-[10px] text-slate-400 font-medium leading-tight">
-            © 2026 Cửu Long medflow - Nguyễn Minh Nhật<br/>Cửu Long Polyclinic
+            © 2026 Cửu Long Polyclinic - Nguyễn Minh Nhật<br/>
           </p>
         </div>
       </div>
